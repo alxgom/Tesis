@@ -1,0 +1,229 @@
+\documentclass[a4paper,11pt,spanish,sans]{exam}
+\usepackage[spanish]{babel}
+%\usepackage[utf8]{inputenc}
+\usepackage{multicol}
+%\usepackage[latin1]{inputenc}
+\usepackage{fontspec}%la posta para las tildes con lualatex
+\usepackage[margin=0.4in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{multicol}
+\usepackage{natbib}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{epstopdf}
+\usepackage{capt-of}
+\usepackage[usenames]{color}
+\usepackage{pgf,tikz}
+\usepackage{mathrsfs}
+\usetikzlibrary{arrows}
+\usetikzlibrary{babel}
+\usepackage{pst-fractal}
+\usetikzlibrary{decorations.markings}
+\usetikzlibrary{shapes.geometric}
+\usetikzlibrary{shapes,snakes}
+\usepackage{tkz-euclide}
+\usetkzobj{all}
+\usepackage{fullpage} 
+\usepackage{parskip}
+\usepackage{caption}
+\usepackage{subcaption}
+%los de aca abajo capaz no los uso
+
+\newcommand{\webpdf}{https://drive.google.com/file/d/0B2MOYme4kZd-OVVPdzF4VGoya1E/view?usp=sharing}%no lo uso
+\newcommand{\Ts}{\rule{0pt}{2.6ex}}       % Top strut
+\newcommand{\Bs}{\rule[-1.2ex]{0pt}{0pt}} % Bottom strut
+
+%el header de las hojas.
+
+
+\begin{document}
+
+
+\begin{center}
+\section*{Fresnel Problem}
+\end{center}
+%vimos que enteros.. reales.. etc... buenos. ahora vamos a ver otros mas generales... los complejos.
+%ver definicion de mate 4
+
+\section*{Equations:} 
+
+
+From the equations from the paper 'spatiotemporal instabilities of lasers in models reduced via center manifold techniques' (DOI: http://dx.doi.org/10.1103/PhysRevA.44.4712)
+
+\[
+\begin{cases}
+\partial_t E(\rho,\varphi,t)=-k\left([1+cos(w_{mod}.t)-i.\left[\delta+a\left[\dfrac{\nabla^2_{\bot}}{4}+1-\rho^2\right]\right]].E-P\right)\\
+\partial_t P(\rho,\varphi,t)=-(1+i\delta)P+E.D\\
+\partial_t D(\rho,\varphi,t)=-\gamma_{\parallel}(D-\chi(\rho)+\frac{1}{2}(E^*P+EP^*))
+\end{cases}
+\]
+
+with $E \in \mathbb{C}$ and $P \in \mathbb{C}$
+
+\section{Test Paper equations:}
+
+From the equations from the paper 'Symmetry breaking, dynamical pulsations, and turbulence in the transverse intensity patterns of a laser: the role played by defects' (DOI: http://dx.doi.org/10.1016/0167-2789(92)90144-C)
+
+$\begin{cases}
+\partial_t E(\rho,\varphi,t)=-k\left([f(\rho)-i.\left[\delta+\frac{1}{2}a\left[\dfrac{\nabla^2_{\bot}}{4}+1-\rho^2\right]\right]].E-2CP\right)\\
+\partial_t P(\rho,\varphi,t)=-\gamma_{\bot}[(1+i\delta)P+E.D]\\
+\partial_t D(\rho,\varphi,t)=-\gamma_{\parallel}(D-\chi(\rho)-\frac{1}{2}(E^*P+EP^*))
+\end{cases}$
+
+
+with $E \in \mathbb{C}$ and $P \in \mathbb{C}$
+
+\section{Code deduction:}
+
+From the paper 'Symmetry breaking, dynamical pulsations, and turbulence in the transverse intensity patterns of a laser: the role played by defects', we use the Galerkin method to integrate the equations.
+
+The galerkin method consist in choosing a function basis that is compatible with the problem (here the bondary conditions are implicit in the choice made for the basis), expanding some initial conditions in the basis, and then evolving the basis functions.
+
+Here we are under the hypotesis that we can perform variable separation under the cylindrical simmetry of the boundary conditions ($\rho$ decays to 0 at infinity).
+
+
+Thus the problem translates from a $n$ PDE equations to $m.n$ ordinary equations, where $m$ is the degree in witch i expand the function.
+
+
+For this problem the chosen funcions are the Gauss-Laguerre polynomials:
+
+\[A_{pm}(\rho, \varphi)=2(2\rho^2)^{m/2}(\dfrac{p!}{(p+m)!})^{1/2}e^{-\rho{^2}}L_p^m(2\rho{^2})e^{im\varphi} \] 
+
+where $-p<m<p$ 
+
+OBS: from \href{https://www.wikiwand.com/en/Gaussian_beam}{wikipedia: Gaussian Beam}
+
+"Beam profiles which are circularly symmetric (or lasers with cavities that are cylindrically symmetric) are often best solved using the Laguerre-Gaussian modal decomposition.[3] These functions are written in cylindrical coordinates using Laguerre polynomials. Each transverse mode is again labelled using two integers, in this case the radial index $p\ge 0$ and the azimuthal index l which can be positive or negative (or zero).
+
+\[ u(r,\phi,z)=\frac{C^{LG}_{lp}}{w(z)}\left(\frac{r \sqrt{2}}{w(z)}\right)^{\! |l|} \exp\! \left(\! -\frac{r^2}{w^2(z)}\right)L_p^{|l|}  \! \left(\frac{2r^2}{w^2(z)}\right)  \times \exp \! \left(\! - i k \frac{r^2}{2 R(z)}\right) \exp(i l \phi) \, \exp (   \! -ikz)  \,  \exp(i \psi(z)) \; \;   \]
+
+where $L_p^l$ are the generalized Laguerre polynomials.
+$ C^{LG}_{lp} $is a required normalization constant not detailed here; $w(z)$ and $R(z)$ have the same definitions as above. As with the higher-order Hermite-Gaussian modes the magnitude of the Laguerre-Gaussian modes' Gouy phase shift is exagerated by the factor $N+1$:
+
+$\psi(z)  = (N+1) \, \arctan \left( \frac{z}{z_\mathrm{R}} \right) $
+
+where in this case the combined mode number $N = |l| + 2p$. As before, the transverse amplitude variations are contained in the last two factors on the upper line of the equation, which again includes the basic Gaussian drop off in r but now multiplied by a Laguerre polynomial. The effect of the rotational mode number l, in addition to affecting the Laguerre polynomial, is mainly contained in the phase factor $exp(-il\phi)$, in which the beam profile is advanced ( or retarded) by l complete $2\pi $ phases in one rotation around the beam (in $\phi$). This is an example of an optical vortex of topological charge l, and can be associated with the orbital angular momentum of light in that mode."
+
+
+La idea aca es que quiero descomponer mi solucion en una base de soluciones(polinomiales, como en una cuadratura) de funciones que en la parte radial decaigan con $\rho \longrightarrow \infty$.
+
+La base normalmente utilizada en estos casos son los polinomios de laguerre $L^m_p(x): \left[ 0, \infty \right) \longrightarrow \mathbb{R}$
+
+Generalized Laguerre polynomial: $L^m_p(x)=\sum_{i=0}^p (-1)^i {n+m \choose n-i}\dfrac{x^i}{i!}$
+
+Que cumplen con la siguiente norma de ortogonalidad:
+
+ $\left \langle L_n^m | L_{n'}^{m} \right \rangle = \int_0^\infty e^{-x} x^{m} L_n^m(x) L_{n'}^{m}(x) dx = \frac{\Gamma(n+m+1)}{n!} \delta_{nn'}=\Gamma(m+1){n+m \choose n} \delta_{nn'} $
+
+Definiendo 
+$R_n^m=(\dfrac{e^{-x} x^{m}}{\Gamma(m+1){n+m \choose n}})^{1/2}  L_n^m(x)=e^{-x/2} x^{m/2}(\dfrac{(n+m)!}{n!})^{1/2}  L_n^m(x)$
+
+Ahora $\left \langle R_n^m | R_{n'}^{m} \right \rangle = \int_0^\infty R_n^m(x) R_{n'}^{m}(x) dx = \delta_{nn'} $
+
+Using rotation simetry, we use a trigonometric base for the angular space. Therefore we define : 
+\[\hat{A}_{pm}(\rho,\varphi)=R_{pm}(\rho)E^{im\varphi}\]
+
+
+$\left \langle A_p^m | A_{p'}^{m'} \right \rangle = \int_0^\infty A_p^m(x,\varphi) A_{p'}^{m'}(x,\varphi) dx d\varphi = \delta_{pp'}\delta_{mm'}$
+
+So, let $f$ be a initial condition for some variable,  $f$ can now be written in the Gauss-Laguerre space as a linear combination, by proyecting it (such as a Fourier Series):
+
+\[f=\sum_{pm}C_{pm}A_{pm}\]
+
+where \[C_{pm}=\langle f | A_{pm}\rangle=\iint f(x,\varphi).A_{pm}(x,\varphi) \, d\!x d\!\varphi  \].
+
+Since in our problem, we use $A_{pm}(2\rho^2)$ and ..
+
+So now, all our equations will be ordinary differential equations, such that 
+\[\partial_t f= \partial_t \sum_{pm}C_{pm}A_{pm}= \hat{\alpha} \sum_{pm}C_{pm}A_{pm} +\hat{L}\sum_{pm}C_{pm}A_{pm} + \hat{NL}\sum_{pm}C_{pm}A_{pm}    \]
+
+where $\hat{L}$ and $\hat{NL} $ are Linear and Non Linear operators.
+
+Therefore 
+
+\[\partial_t f= \sum_{pm}C_{pm} \partial_t A_{pm}= \sum_{pm}C_{pm} \hat{\alpha} A_{pm} +\sum_{pm} \hat{L}C_{pm}A_{pm} + \hat{NL}\sum_{pm}C_{pm}A_{pm} \].
+
+In our problem, $\hat{L}$ will be related with the laplacian operator in cylindrycal coordinates.
+
+So now, we have 3 problems to solve for developing our code: 
+
+1- Integrating numerically $\iint f.A_{pm}\rho \, d\!\rho d\!\varphi $ for each initial condition $f$ that we choose, and choosing the amount of G-L polynomials we will use in this approximation to make it as accurate as we need.
+
+2- Find the ordinary differential eqs we are going to use, and evolve them we some time method of our liking (Runge-kutta 4).
+
+3- Choosing some time and spatial steps for the integration.
+
+\section{Coefficient integration}
+
+\section{ODE deduction}
+
+First we wil recall the laplacian in spherical coordinates:
+
+\[ \nabla_{\bot}=\frac{1}{\rho}\partial_{\rho}(\rho\partial_{\rho}) +\frac{1}{\rho}\partial^2_{\varphi} =\partial^2_{\rho}+\frac{1}{\rho}\partial_{\rho} +\frac{1}{\rho^2}\partial^2_{\varphi}  \]
+
+So we start we the most troublesome part, $\nabla_{\bot}\sum_{pm}C_{pm}A_{pm}=\sum_{pm}C_{pm}\nabla_{\bot}A_{pm}$
+
+\[\nabla_{\bot}A_{pm}=\nabla_{\bot}R_{pm}e^{im\varphi}=\frac{1}{\rho}\partial_{\rho}(\rho\partial_{\rho}R_{pm}e^{im\varphi}) +\frac{1}{\rho}\partial^2_{\varphi}R_{pm}e^{im\varphi}=\frac{1}{\rho}\partial_{\rho}(\rho\partial_{\rho}R_{pm})e^{im\varphi} +\frac{-m^2}{\rho^2}R_{pm}e^{im\varphi}\]
+
+taking a look at $\frac{1}{\rho}\partial_{\rho}(\rho\partial_{\rho}R_{pm})$:
+
+%\[\frac{1}{\rho}\partial_{\rho}(\rho\partial_{\rho}R_{pm})=\dots= 2(2\rho^2)^{m/2}(\dfrac{p!}{(P+m!)})^{1/2}e^{\rho^2}[L^m_p(2\rho^2)(4\rho^2-2\rho-8+2/\rho)+\partial_\rho L^m_p()(16-16\rho^2)+4\rho\partial^2_\rho L^m_p()] \]
+
+ahora usamos que  \[\partial^k_x L^m_p(x)=(-1)^kL_{p-k}^{m+k}(x)\]
+
+entonces \[\begin{cases}
+\partial_{\rho}L_p^m(2\rho^2)=-L_{p-1}^{m+1}(2\rho^2)4\rho\\
+\partial^2_{\rho}L_p^m(2\rho^2)=L_{p-2}^{m+2}(2\rho^2)16\rho^2-4.L_{p-1}^{m+1}(2\rho^2)
+\end{cases}
+\]
+
+\[
+\frac{1}{\rho}\partial_{\rho}(\rho\partial_{\rho}R_{pm})=\\
+ 
+2(2\rho^2)^{m/2}(\dfrac{p!}{(p+m)!})^{1/2}e^{-\rho{^2}}
+ \times \left[L_p^m(2\rho^2)(\frac{2}{\rho^2}+\frac{2}{\rho}-12+4\rho^2)+ \partial_{\rho}L_p^m(2\rho^2)(\frac{5}{\rho}-4\rho)+ \partial^2_{\rho}L_p^m(2\rho^2)      \right]
+\]
+
+lo que queda como 
+
+\[
+\frac{1}{\rho}\partial_{\rho}(\rho\partial_{\rho}R_{pm})=
+
+2(2\rho^2)^{m/2}(\dfrac{p!}{(p+m)!})^{1/2}e^{-\rho{^2}} 
+\times  \left[L_p^m(2\rho^2)(\frac{2}{\rho^2}+\frac{2}{\rho}-12+4\rho^2) - L_{p-1}^{m+1}(2\rho^2)(24-16\rho^2)+  L_{p-2}^{m+2}(2\rho^2)16\rho^2  \right]
+\]
+
+y por ultimo, usando la propiedad \href{https://www.wikiwand.com/en/Laguerre_polynomials}{wiki laguerre polynomials}
+
+$
+L_m^{p}(x)= \frac{m+1-x}{p}  L_{p-1}^{(m+1)}(x)- \frac{x}{n} L_{p-2}^{(m+2)}(x)
+$
+
+\[
+\frac{1}{\rho}\partial_{\rho}(\rho\partial_{\rho}R_{pm})=
+
+2(2\rho^2)^{m/2}(\dfrac{p!}{(p+m)!})^{1/2}e^{-\rho{^2}} 
+
+\times  \left[ L_{p-2}^{m+2}\!(2\rho^2) \,(16\rho^2-\frac{2\rho^2}{p})   - L_{p-1}^{m+1}\!(2\rho^2) \, [(24-16\rho^2)+\frac{m+1-2\rho^2}{p}(\frac{2}{\rho^2}+\frac{2}{\rho}-12+4\rho^2)]  \right]
+\]
+
+
+Por lo tanto nos queda una ecuación del tipo:
+
+\[ \nabla_{\bot}A_{pm}=\nabla_{\bot}B_{pm}L_p^m e^{im\varphi}=B_{pm}[\alpha L_{p-2}^{m+2} - \beta L_{p-1}^{m+1} ] e^{im\varphi} -\frac{m^2}{\rho^2}B_{pm}L^m_p e^{im\varphi}
+\]
+
+y repitiendo el truco anterior obtenemos 
+\[ \nabla_{\bot}A_{pm}=\nabla_{\bot}B_{pm}L_p^m e^{im\varphi}=B_{pm}[\hat{\alpha} L_{p-2}^{m+2} - \hat{\beta}L_{p-1}^{m+1} ] e^{im\varphi}
+\]
+
+con
+
+\[\begin{cases}
+B_{pm}=2(2\rho^2)^{m/2}(\dfrac{p!}{(p+m)!})^{1/2}e^{-\rho{^2}} \\
+\hat{\alpha}=(16\rho^2-\frac{2\rho^2-\frac{m^2}{\rho^2}}{p})\\
+\hat{\beta}= (24-16\rho^2)+\frac{m+1-2\rho^2}{p}(\frac{2}{\rho^2}+\frac{2}{\rho}-12+4\rho^2+\frac{m^2}{\rho^2})
+\end{cases}
+
+\]
+\end{document}
