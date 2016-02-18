@@ -1,127 +1,143 @@
 program main
-
-    USE random
     USE constants
-    USE resolution
     USE rungekutta
     use my_lib
-    use globalpar
+    use funcs
 
     IMPLICIT NONE
+    !************************************************
+    !set variables for main program
 
-    !parameters
-    real(8) :: a, gperp,tempscale,wscale, k, mu, Dphi0, d, g, D0, m, w_res, w, atest,wf
-    real(8), parameter :: wfmin=0.00350, wfmax=0.00410
-    integer, parameter :: len_wfn=3
-    real(8), dimension (1:len_wfn) :: wfn
-    real(8), allocatable, dimension(:) :: exr,exi,eyr,eyi,rxr,rxi,ryr,ryi,pop  !notation: exr-> real part of Ex electric field. rxr->real part of Rx polarization field. ->pop= population inversion.
-    real(8) :: dt
-
-    !integer :: i
-    !INTEGER, ALLOCATABLE, DIMENSION(:)                  :: xtype
-    real(8) :: jump
-    integer :: numstep
     real(8) :: intime
-
-!    real(8), intent(in) :: yinit
-
-    !outputs
-    real(8), allocatable, dimension(:,:) :: y
+    real(8) :: timeinit=0.d0
     real(8), allocatable, dimension(:) :: time
-
-    real(8), DIMENSION(4,2) :: test
-
-    !********************to test inits*****************
     real(8), dimension(9) :: yinit
-!    real(8), allocatable, intent(inout), y(:)
-!    real(8), allocatable, intent(inout), time(:)
-!    real(8), allocatable :: init(:)
-    real(8), allocatable, dimension(:) :: timeinit
-    character :: new
-    character :: last
-    integer :: init
-    real(8) :: timemin=0
-    integer :: i
+    integer :: numstep
+    integer :: indexkeep
 
-    test(:,1)=(/2,3,4,2/)! (2,3)
-    test(:,2)=(/6,3,4,2/)!
-    print*, test
+    real(8), allocatable, dimension(:) :: exr,exi,eyr,eyi,rxr,rxi,ryr,ryi,pop  !notation: exr-> real part of Ex electric field. rxr->real part of Rx polarization field. ->pop= population inversion.
+    real(8), allocatable, dimension(:) :: intensity_x2, intensity_y2, intensity
 
-    !'''parameters for normalization'''
-    a=2d0
-    gperp=10**8d0 !#gamma perpendicular, loss rate
-    tempscale=1*(10.**6)/gperp !#scale to micro seconds
-    wscale=1000*gperp/(10.**6) !#scale frequency to khz
+    integer :: numkeep
+    integer :: z
+    integer, parameter :: debug=1
 
-    !'''parameters for the equation'''
-    k=0.9*10**7d0/gperp !#normalized loss rate
-    mu=0.25d0/10**4 !#g
-    Dphi0=0.0d0 !#phase shift [-pi,pi]
-    d=1.0d0 !#detuning
-    g=2.5*10.**4/gperp !#*((2*pi)**2) #sigma parallel, normalized loss rate
-    D0=a*k/mu !#Pump
-    m=0.02d0 !#modulation amplitud [0,1]
-    wf=0.00420d0
 
-    !'''parameters to compare with the results'''
-    w_res=sqrt(k*g*((D0*mu/k)-1.))*wscale !#resonance frequency
-    atest=D0*mu/k
-    w=sqrt(k*g*(a-1.)-(g*g*a*a)/4)*wscale !#Relaxation oscilations frequency
+    INTEGER NMAX,NSTPMX
+    PARAMETER (NMAX=9,NSTPMX=20000)! Maximum number of functions and
+    !maximum number of values to
+    !be stored.
+    REAL*8 xx(NSTPMX),y(NMAX,NSTPMX)
+    COMMON /path/ xx,y
+    !************************************************
 
-    !***********************************************************************************************************
-    call linspace(wfn,wfmin,wfmax,len_wfn,2) !i make wfn, a linearly spaced freq vector of dim (1,3) for a swipe
+    call comparams()                             !parameters to compare with the expected solutions
+    call saveparams()                            !saves the used parameters to a bin file, to be read by python.
 
-    intime=500.*20*gperp/10**6!#integration time FOR TRANDITORY
-    jump=1.
-    numstep=int(intime/jump)
-    allocate(time(numstep))
-    call linspace(time,timemin, intime, numstep,1)
     yinit=(/1., 1., 1.,-1., 1.,1., 1.,-1.9, 6.65973518*10**3/)
 
+    intime=500.*25*gperp/10**6                   !normalized integration time
+    call initial(intime,numstep, timeinit , time)!sets numstep, and time array
+    numkeep=numstep*10/25                        !number of steps to keep on file(transitory)
+    indexkeep=numstep-numkeep+1
 
+    if (debug.eq.1) then
+        print*, indexkeep,'<', numstep
+        print*, 'shape time: ', shape(time), '=', 'number of time steps: ', numstep
+    end if
 
-    print*, 'integration time=', intime, 'numstep=', numstep
-    print*, 'wfn=', wfn, 'shape wfn=', shape(wfn)
-    print*, 'shape time=', shape(time)
-
-    !time=(numstep)
-    !y=(:,numstep)
-    !print*, shape(y), shape(time)
-    !y(0,:)=(/0,0,0,0,0,0,0,0,0/)
-    !print*, y
-!    t(0)=(/0/)
-
- !   initial(1,time,y)
-
-  !  print*, 'yinit=', yinit
-
-
+    !***********************************************************************************************************
+    !newton integration
     allocate(exr(numstep),exi(numstep),eyr(numstep),eyi(numstep),rxr(numstep),rxi(numstep),ryr(numstep),ryi(numstep),pop(numstep))
-    dt=(intime-timemin)/(numstep-1)
-    print*, dt
+    call newtonint(yinit, time, numstep, exr,exi,eyr,eyi,rxr,rxi,ryr,ryi,pop,debug)
 
-    exr(1)=yinit(1)
-    exi(1)=yinit(2)
-    eyr(1)=yinit(3)
-    eyi(1)=yinit(4)
-    rxr(1)=yinit(5)
-    ryi(1)=yinit(6)
-    ryr(1)=yinit(7)
-    ryi(1)=yinit(8)
-    pop(1)=yinit(9)
+    allocate(intensity_x2(numkeep),intensity_y2(numkeep),intensity(numkeep))
 
-    do i=1,numstep
-        !print*, i
-        exr(i+1)=exr(i)+dt*(-k*exr(i)+mu*rxr(i))
-        exi(i+1)=exi(i)+dt*(-k*exi(i)+mu*rxi(i))
-        eyr(i+1)=eyr(i)+dt*(-k*eyr(i)+mu*ryr(i))-eyi(i)*(Dphi0+m*cos(wf*time(i)))
-        eyi(i+1)=eyi(i)+dt*(-k*eyi(i)+mu*ryi(i))+eyr(i)*(Dphi0+m*cos(wf*time(i)))
-        rxr(i+1)=rxr(i)+dt*(-(rxr(i)-d*rxi(i))+exr(i)*pop(i))
-        rxi(i+1)=rxi(i)+dt*(-(rxi(i)+d*rxr(i))+exi(i)*pop(i))
-        ryr(i+1)=ryr(i)+dt*(-(ryr(i)-d*ryi(i))+eyr(i)*pop(i))
-        ryi(i+1)=ryi(i)+dt*(-(ryi(i)+d*ryr(i))+eyi(i)*pop(i))
-        pop(i+1)=pop(i)+dt*(-g*(pop(i)-D0+(exr(i)*rxr(i)+exi(i)*rxi(i)+eyr(i)*ryr(i)+eyi(i)*ryi(i)) ) )
+    print*, size(exr(indexkeep:numstep)), '=', numkeep
+    print*, indexkeep+numkeep-1,'=',numstep
+    print*, 'indexkeep',indexkeep
+
+    do z=indexkeep,numstep,1
+        intensity_x2(z-indexkeep+1)=exr(z)**2+exi(z)**2
+        intensity_y2(z-indexkeep+1)=eyr(z)**2+eyi(z)**2
+        intensity(z-indexkeep+1)=sqrt(intensity_x2(z-indexkeep+1)+intensity_y2(z-indexkeep+1))
     enddo
 
+    if (debug.eq.1) then
+        print*,
+        print*, 'size intensity: ', size(intensity), '=', 'numkeep:', numkeep
+    end if
 
+    !**************************************************************************************
+    !write the variables to a binary file, to be read by python for plotting and analysis.
+
+    OPEN(2,file='time.in',form='unformatted')
+        WRITE(2) time(indexkeep: numstep)
+    CLOSE(2)
+
+    OPEN(1,file='exr.in',form='unformatted')
+        WRITE(1) exr(indexkeep: numstep)
+    CLOSE(1)
+
+    OPEN(1,file='pop_euler.in',form='unformatted')
+        WRITE(1) pop(indexkeep: numstep)
+    CLOSE(1)
+
+    OPEN(1,file='intensity.in',form='unformatted')
+        WRITE(1) intensity
+    CLOSE(1)
+
+    OPEN(1,file='intensity_x2.in',form='unformatted')
+        WRITE(1) intensity_x2
+    CLOSE(1)
+
+    OPEN(1,file='intensity_y2.in',form='unformatted')
+        WRITE(1) intensity_y2
+    CLOSE(1)
+    !**************************************************************************************************************
+
+    call local_max(intensity,numkeep,3,debug) !searches for local maximum of the intensity, for the biffurcatoin diagrams.(prints to bynary file)
+
+    if (debug.eq.1) then
+        print*,
+        print*, 'integration time=', intime*tempscale, 'microseconds'
+        print*, 'integration steps:  numstep=', numstep
+    end if
+
+   ! call neararray(yinit,numstep,time,dt)
+
+
+
+   !********************************
+!   function f(x,t)
+!        real*8,intent(in) :: x
+!        real*8,intent(in) :: t
+!        real*8 :: ka
+!
+!        f=x*t !test function
+!    endfunction
+
+    !**************************************
+
+
+   ! call rk4mio(yinit, time, numstep,f, exr,exi,eyr,eyi,rxr,rxi,ryr,ryi,pop,debug)
+    call rkdumb(yinit,9,0d0,intime,20000,derivs)
+    print*,xx
 end
+
+
+    !'''parameters for normalization'''
+!    a=2d0
+!    gperp=10**8d0 !#gamma perpendicular, loss rate
+!    tempscale=1*(10.**6)/gperp !#scale to micro seconds
+!    wscale=1000*gperp/(10.**6) !#scale frequency to khz
+!
+!    !'''parameters for the equation'''
+!    k=0.9*10**7d0/gperp !#normalized loss rate
+!    mu=0.25d0/10**4 !#g
+!    Dphi0=0.0d0 !#phase shift [-pi,pi]
+!    d=1.0d0 !#detuning
+!    g=2.5*10.**4/gperp !#*((2*pi)**2) #sigma parallel, normalized loss rate
+!    D0=a*k/mu !#Pump
+!    m=0.02d0 !#modulation amplitud [0,1]
+!    wf=0.00420d0

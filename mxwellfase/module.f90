@@ -8,16 +8,16 @@
 
 !=================================================================
 
-  MODULE resolution
+!  MODULE resolution
 !
 ! q: maximum number of zeros in the radial direction
 ! l: maximum number of l in the spherical harmonics
 !
-      INTEGER, PARAMETER :: q = 5
-      INTEGER, PARAMETER :: l = 5
-      SAVE
-
-  END MODULE
+!      INTEGER, PARAMETER :: q = 5
+!      INTEGER, PARAMETER :: l = 5
+!      SAVE
+!
+!  END MODULE
 
 !=================================================================
 
@@ -33,48 +33,66 @@
 !=================================================================
 
   MODULE constants
-!
-! TOL : Tolerance for functions and Romberg integration
-! NRAD: Number of points used in radial Gauss quadratures
-! NANG: Number of points used in angular Gauss quadratures
-!
-      DOUBLE COMPLEX, PARAMETER   :: IM = (0.,1.)
-      DOUBLE PRECISION, PARAMETER :: PI = acos(-1d0)
-      DOUBLE PRECISION, PARAMETER :: TOL = 1.d-12
-      DOUBLE PRECISION, PARAMETER :: TINY = 1.d-12
-      INTEGER, PARAMETER          :: NRAD = 87
-      INTEGER, PARAMETER          :: NANG = 87
-      SAVE
+    implicit none
+    real(8), parameter :: a=2d0
+    real(8), parameter :: gperp=10**8d0 !#gamma perpendicular, loss rate
+    real(8), parameter :: tempscale=1*(10.**6)/gperp !#scale to micro seconds
+    real(8), parameter :: wscale=1000*gperp/(10.**6) !#scale frequency to khz
+    real(8), parameter :: mu=0.25d0/10**4, Dphi0=0.0d0
+    real(8), parameter :: k=0.9*10**7d0/gperp, g=2.5*10.**4/gperp, D0=a*k/mu!, w_res=sqrt(k*g*((D0*mu/k)-1.))*wscale, w=sqrt(k*g*(a-1.)-(g*g*a*a)/4)*wscale, atest=D0*mu/k,
+    real(8) :: d=1.0d0
+    real(8) :: m=0.02d0
+    real(8) :: wf=0.0045d0
+    real(8) :: w_res, w, atest
+    integer, parameter :: savefile=1
+
+    contains
+
+    subroutine comparams()
+    !'''parameters to compare with the results'''
+        w_res=sqrt(k*g*((D0*mu/k)-1.))*wscale !#resonance frequency
+        atest=D0*mu/k
+        w=sqrt(k*g*(a-1.)-(g*g*a*a)/4)*wscale !#Relaxation oscilations frequency
+    end subroutine
+
+    subroutine saveparams()
+        if (savefile.eq.1) then
+            open (1,file="scales.in",form='unformatted')
+                write(1)  m, wf*wscale, Dphi0, w_res , k, mu, d, g, D0, a, wf, wscale, tempscale
+            close (1)
+        endif
+    end subroutine
+
 
   END MODULE constants
 !=================================================================
 
 
-  MODULE random
-      CONTAINS
-       DOUBLE PRECISION FUNCTION randu(idum)
+!  MODULE random
+!      CONTAINS
+!       DOUBLE PRECISION FUNCTION randu(idum)
+!!
+!! Uniform distributed random numbers between -1 and
+!! 1. The seed idum must be between 0 and the value
+!! of mask
 !
-! Uniform distributed random numbers between -1 and
-! 1. The seed idum must be between 0 and the value
-! of mask
-
-       INTEGER, PARAMETER  :: iq=127773,ir=2836,mask=123459876
-       INTEGER, PARAMETER  :: ia=16807,im=2147483647
-       INTEGER             :: idum
-       INTEGER             :: k
-       DOUBLE PRECISION, PARAMETER :: am=1.d0/im
-
-       idum = ieor(idum,mask)
-       k = idum/iq
-       idum = ia*(idum-k*iq)-ir*k
-       IF (idum.lt.0) idum = idum+im
-       randu = am*idum
-       randu = (randu-.5d0)*2.d0
-       idum = ieor(idum,mask)
-
-       END FUNCTION randu
-
- END MODULE random
+!       INTEGER, PARAMETER  :: iq=127773,ir=2836,mask=123459876
+!       INTEGER, PARAMETER  :: ia=16807,im=2147483647
+!       INTEGER             :: idum
+!       INTEGER             :: k
+!       DOUBLE PRECISION, PARAMETER :: am=1.d0/im
+!
+!       idum = ieor(idum,mask)
+!       k = idum/iq
+!       idum = ia*(idum-k*iq)-ir*k
+!       IF (idum.lt.0) idum = idum+im
+!       randu = am*idum
+!       randu = (randu-.5d0)*2.d0
+!       idum = ieor(idum,mask)
+!
+!       END FUNCTION randu
+!
+! END MODULE random
 
 
 !=================================================================
@@ -328,4 +346,26 @@
 !
 !  END MODULE functions
 !=================================================================
+!!
+
+!    !'''parameters for normalization'''
+!!    a=2d0
+!!    gperp=10**8d0 !#gamma perpendicular, loss rate
+!    tempscale=1*(10.**6)/gperp !#scale to micro seconds
+!    wscale=1000*gperp/(10.**6) !#scale frequency to khz
+!
+!    !'''parameters for the equation'''
+!#normalized loss rate
+!!    mu=0.25d0/10**4 !#g
+!!    Dphi0=0.0d0 !#phase shift [-pi,pi]
+!!    d=1.0d0 !#detuning
+!    g=2.5*10.**4/gperp !#*((2*pi)**2) #sigma parallel, normalized loss rate
+!    D0=a*k/mu !#Pump
+!    m=0.02d0 !#modulation amplitud [0,1]
+!    wf=0.00420d0
+!!
+!    !'''parameters to compare with the results'''
+!    w_res=sqrt(k*g*((D0*mu/k)-1.))*wscale !#resonance frequency
+!    atest=D0*mu/k
+!    w=sqrt(k*g*(a-1.)-(g*g*a*a)/4)*wscale !#Relaxation oscilations frequency
 !!
