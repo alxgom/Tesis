@@ -6,7 +6,7 @@ module my_lib
 
     subroutine linspace(x,x_start, x_end, x_len,dir)
     !******************************************************************************
-    !
+    !linearly spaced array named x, from x_start value to x_end, with #x_len values.
     !dir=1 ---> from min to max.    dir=2 ---> from max to min.
     !******************************************************************************
         real(8), dimension(:), intent(inout) :: x
@@ -16,7 +16,6 @@ module my_lib
         integer :: dir
 
         dx=(x_end - x_start)/(x_len-1)
-        print*, 'dx=', dx
         if (dir.eq.1) then
             do i=1,x_len
                 x(i)=x_start+(i-1)*dx
