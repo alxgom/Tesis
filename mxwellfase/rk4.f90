@@ -124,7 +124,6 @@ subroutine rk4vec ( t0, m, u0, dt, f, u )
   implicit none
 
   integer ( kind = 4 ) m
-
   real ( kind = 8 ) dt
   external f
   real ( kind = 8 ) f0(m)

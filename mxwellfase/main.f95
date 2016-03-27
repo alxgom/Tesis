@@ -1,524 +1,226 @@
 program main
-    !18/3/2016
-!    call maxrk4f90()
-    call maxrk4f90_swipe()
-end
-
-subroutine w_swipe_1()
-    !bug: no agarra bien el segundo tiempo.
-    use constants
+    !25/3/2016
     implicit none
 
-    real*8 :: t_start, t_stop,t_out,mvar,wvar
-    integer :: i
-    real*8 :: w_start, w_stop, h
+    call gen_integ_swipe()
+  !  call gen_integ_swipe_strobo()
+end
 
-    t_start = 0.0D+00
-    t_stop = 500.*40*gperp/10**6
-    !asi como esta ni hace falta iterar en el espacio dos veces, pero si poner el nuevo tiempo despues de cada paso
-    w_start=0.0038
-    w_stop=0.0045
-    h=(w_stop-w_start)/2000d0
-    do i=1,20
-        !w swipe
-        mvar=0.02
-        wvar=w_start+h
-        call maxintrk45f_var(t_start,t_stop,t_out,mvar,wvar)
-        print*, 'i step t_out:', i, '-->', t_out
-        print*, 'i step t_stop:', i, '-->', t_stop
-        t_start=t_out
-        t_stop=t_out+t_stop
-        print*,i
-    end do
-
-end subroutine
-subroutine maxintegeuler()
-    USE constants
-    USE rungekutta
-    use my_lib
+subroutine gen_integ_swipe()
+    use constants
     use funcs
 
     IMPLICIT NONE
-    !************************************************
-    !set variables for main program
-
-    real(8) :: intime
-    real(8) :: timeinit=0.d0
-    real(8), allocatable, dimension(:) :: time
-    real(8), dimension(9) :: yinit
-    integer :: numstep
-    integer :: indexkeep
-
-    real(8), allocatable, dimension(:) :: exr,exi,eyr,eyi,rxr,rxi,ryr,ryi,pop  !notation: exr-> real part of Ex electric field. rxr->real part of Rx polarization field. ->pop= population inversion.
-    real(8), allocatable, dimension(:) :: intensity_x2, intensity_y2, intensity
-
-    integer :: numkeep
-    integer :: z
-    integer, parameter :: debug=1
-    !********************************************************************************
-    print*, ' -------------------------'
-    print*, '|-Euler method program:   |'
-    print*, ' -------------------------'
-
-    call comparams()                             !parameters to compare with the expected solutions
-    call saveparams()                            !saves the used parameters to a bin file, to be read by python.
-    yinit=(/1., 1., 1.,-1., 1.,1., 1.,-1.9, 6.65973518*10**3/)
-    intime=500.*10*gperp/10**6                   !normalized integration time
-    call initial(intime,numstep, timeinit , time)!sets numstep, and time array
-    numkeep=numstep*10/25                        !number of steps to keep on file(transitory)
-    indexkeep=numstep-numkeep+1
-
-    if (debug.eq.1) then
-        print*, indexkeep,'<', numstep
-        print*, 'shape time: ', shape(time), '=', 'number of time steps: ', numstep
-        print*, 'intime:', intime
-        print*, 'yinit:', yinit
-    end if
-
-    !***********************************************************************************************************
-    !newton integration
-    allocate(exr(numstep),exi(numstep),eyr(numstep),eyi(numstep),rxr(numstep),rxi(numstep),ryr(numstep),ryi(numstep),pop(numstep))
-    call newtonint(yinit, time, numstep, exr,exi,eyr,eyi,rxr,rxi,ryr,ryi,pop,debug)
-    allocate(intensity_x2(numkeep),intensity_y2(numkeep),intensity(numkeep))
-!
-    print*, size(exr(indexkeep:numstep)), '=', numkeep
-    print*, indexkeep+numkeep-1,'=',numstep
-    print*, 'indexkeep',indexkeep
-!
-    do z=indexkeep,numstep,1
-        intensity_x2(z-indexkeep+1)=exr(z)**2+exi(z)**2
-        intensity_y2(z-indexkeep+1)=eyr(z)**2+eyi(z)**2
-        intensity(z-indexkeep+1)=sqrt(intensity_x2(z-indexkeep+1)+intensity_y2(z-indexkeep+1))
-    enddo
-!
-    if (debug.eq.1) then
-        print*,
-        print*, 'size intensity: ', size(intensity), '=', 'numkeep:', numkeep
-    end if
-!
-    !**************************************************************************************
-    !write the variables to a binary file, to be read by python for plotting and analysis.
-
-    OPEN(2,file='time_euler.in',form='unformatted')
-        WRITE(2) time(indexkeep: numstep)
-    CLOSE(2)
-
-    OPEN(1,file='exr_euler.in',form='unformatted')
-        WRITE(1) exr(indexkeep: numstep)
-    CLOSE(1)
-
-    OPEN(1,file='pop_euler.in',form='unformatted')
-        WRITE(1) pop(indexkeep: numstep)
-    CLOSE(1)
-
-    OPEN(1,file='intensity_euler.in',form='unformatted')
-        WRITE(1) intensity
-    CLOSE(1)
-
-    OPEN(1,file='intensity_x2_euler.in',form='unformatted')
-        WRITE(1) intensity_x2
-    CLOSE(1)
-
-    OPEN(1,file='intensity_y2_euler.in',form='unformatted')
-        WRITE(1) intensity_y2
-    CLOSE(1)
-    !**************************************************************************************************************
-!
-    call local_max(intensity,numkeep,1,debug) !searches for local maximum of the intensity, for the biffurcatoin diagrams.(prints to bynary file)
-
-    if (debug.eq.1) then
-        print*,
-        print*, 'integration time=', intime*tempscale, 'microseconds'
-        print*, 'integration steps:  numstep=', numstep
-    end if
-
-   ! call neararray(yinit,numstep,time,dt)
-
-
-end subroutine
-subroutine maxintegrk45f()
-    USE constants
-    use my_lib
-    use funcs
-
-    IMPLICIT NONE
-
-
-    integer ( kind = 4 ), parameter :: neqn = 9 !2
-
-    real ( kind = 8 ) abserr
-    integer ( kind = 4 ) flag
-    integer ( kind = 4 ) i_step
-    integer ( kind = 4 ) n_step
-    external r8_f2
-    real ( kind = 8 ) relerr
-    real ( kind = 8 ) t
-    real ( kind = 8 ) t_out
-    real ( kind = 8 ) t_start
-    real ( kind = 8 ) t_stop
-    real ( kind = 8 ) y(neqn)
-    real ( kind = 8 ) yp(neqn)
-
-    real*8, allocatable, dimension(:,:) :: intensitys, yy
-    REAL*8, allocatable, dimension(:) :: xx
-    integer :: numstep
-    integer :: indexkeep
-    integer :: numkeep
-    integer :: z
-    integer, parameter :: debug=1
-
-    call comparams()                             !parameters to compare with the expected solutions
-    call saveparams()                            !saves the used parameters to a bin file, to be read by python.
-
-    write ( *, '(a)' ) ' '
-    write ( *, '(a)' ) 'Runge kutta 4/5 felhbelg method:'
-    write ( *, '(a)' ) '  Solve a vector equation using R8_RKF45:'
-    write ( *, '(a)' ) ' '
-
-    abserr = sqrt ( epsilon ( abserr ) )
-    relerr = sqrt ( epsilon ( relerr ) )
-
-    flag = 1
-
-    t_start = 0.0D+00
-    t_stop = 500.*40*gperp/10**6
-
-    n_step = int(t_stop)
-    allocate(xx(n_step),yy(neqn,n_step)) !mine
-    t = 0.0D+00
-    t_out = 0.0D+00
-
-    y=(/1., 1., 1.,-1., 1.,1., 1.,-1.9, 6.65973518*10**3/)  !valor inicial de y.
-
-    call derivs ( t, y, yp )
-
-    !  write ( *, '(a)' ) ' '
-    !  write ( *, '(a)' ) '  FLAG       T          Y(1)          Y(2)'
-    !  write ( *, '(a)' ) ' '
-    !  write ( *, '(i4,2x,4g14.6)' ) flag, t, y(1), y(2)
-
-    do i_step = 1, n_step
-    t = ( real ( n_step - i_step + 1, kind = 8 ) * t_start &
-        + real (          i_step - 1, kind = 8 ) * t_stop ) &
-        / real ( n_step,              kind = 8 )
-
-    t_out = ( real ( n_step - i_step, kind = 8 ) * t_start &
-            + real (          i_step, kind = 8 ) * t_stop ) &
-            / real ( n_step,          kind = 8 )
-
-    call r8_rkf45 ( derivs, neqn, y, yp, t, t_out, relerr, 10d0**(-4), flag )
-
-    xx(i_step)=t_out !mine
-    yy(:,i_step)=y  !mine
-    !  write ( *, '(i4,2x,4g14.6)' ) flag, t, y(1), y(2)
-    end do
-
-    numstep=n_step
-    numkeep=numstep*5/40                        !number of steps to keep on file(transitory)
-    indexkeep=numstep-numkeep+1
-    allocate(intensitys(3,numkeep))
-    do z=indexkeep,numstep,1  ! calculate the intensity for the last 'numkeep' values of y
-        intensitys(1,z-indexkeep+1)=yy(1,z)**2+yy(2,z)**2 !|E_x|^2
-        intensitys(2,z-indexkeep+1)=yy(3,z)**2+yy(4,z)**2 !|E_y|^2
-        intensitys(3,z-indexkeep+1)=sqrt(intensitys(1,z-indexkeep+1)+intensitys(2,z-indexkeep+1)) !|E|
-    enddo
-    print*, 'shape exr:', shape(yy(1,:)) ,' ', '=', n_step
-    print*, 'shape intensity:', shape(intensitys(3,:))
-    call local_max(intensitys(3,:),numkeep,5,debug) !searches for local maximum of the intensity, for the biffurcatoin diagrams.(prints to bynary file)
-
-    !**************************************************************************************
-    !write the variables to a binary file, to be read by python for plotting and analysis.
-
-    OPEN(2,file='time.in',form='unformatted')
-        WRITE(2) xx(indexkeep: numstep)
-    CLOSE(2)
-
-    OPEN(1,file='exr.in',form='unformatted')
-        WRITE(1) yy(1,indexkeep: numstep)
-    CLOSE(1)
-
-    OPEN(1,file='pop.in',form='unformatted')
-        WRITE(1) yy(9,indexkeep: numstep)
-    CLOSE(1)
-
-    OPEN(1,file='intensity.in',form='unformatted')
-        WRITE(1) intensitys(3,:)
-    CLOSE(1)
-
-    OPEN(1,file='intensity_x2.in',form='unformatted')
-        WRITE(1) intensitys(1,:)
-    CLOSE(1)
-
-    OPEN(1,file='intensity_y2.in',form='unformatted')
-        WRITE(1) intensitys(2,:)
-    CLOSE(1)
-
-    return
-
-end subroutine
-subroutine maxintrk45f_var(t_start,t_stop,t_out)
-    USE constants
-    use my_lib
-    use funcs
-    use varparams
-
-    IMPLICIT NONE
-
-
-    integer ( kind = 4 ), parameter :: neqn = 9 !2
-
-    real ( kind = 8 ) abserr
-    integer ( kind = 4 ) flag
-    integer ( kind = 4 ) i_step
-    integer ( kind = 4 ) n_step
-    external r8_f2
-    real ( kind = 8 ) relerr
-    real ( kind = 8 ) t
-    real ( kind = 8 ), intent(out) :: t_out
-    real ( kind = 8 ), intent(inout) :: t_start
-    real ( kind = 8 ), intent(in) :: t_stop
-    real ( kind = 8 ) y(neqn)
-    real ( kind = 8 ) yp(neqn)
-
-    real*8, allocatable, dimension(:,:) :: intensitys, yy
-    REAL*8, allocatable, dimension(:) :: xx
-    integer :: numstep
-    integer :: indexkeep
-    integer :: numkeep
-    integer :: z
-    integer, parameter :: debug=1
-
-    call comparams()                             !parameters to compare with the expected solutions
-    call saveparams()                            !saves the used parameters to a bin file, to be read by python.
-
-    write ( *, '(a)' ) ' '
-    write ( *, '(a)' ) 'Runge kutta 4/5 felhbelg method:'
-    write ( *, '(a)' ) '  Solve a vector equation using R8_RKF45:'
-    write ( *, '(a)' ) ' '
-
-    abserr = sqrt ( epsilon ( abserr ) )
-    relerr = sqrt ( epsilon ( relerr ) )
-
-    flag = 1
-
-    n_step = int(t_stop)
-    allocate(xx(n_step),yy(neqn,n_step)) !mine
-    t = 0.0D+00
-    t_out = 0.0D+00
-
-    y=(/1., 1., 1.,-1., 1.,1., 1.,-1.9, 6.65973518*10**3/)  !valor inicial de y.
-
-    call derivs_var ( t, y, yp )
-
-    !  write ( *, '(a)' ) ' '
-    !  write ( *, '(a)' ) '  FLAG       T          Y(1)          Y(2)'
-    !  write ( *, '(a)' ) ' '
-    !  write ( *, '(i4,2x,4g14.6)' ) flag, t, y(1), y(2)
-
-    do i_step = 1, n_step
-    t = ( real ( n_step - i_step + 1, kind = 8 ) * t_start &
-        + real (          i_step - 1, kind = 8 ) * t_stop ) &
-        / real ( n_step,              kind = 8 )
-
-    t_out = ( real ( n_step - i_step, kind = 8 ) * t_start &
-            + real (          i_step, kind = 8 ) * t_stop ) &
-            / real ( n_step,          kind = 8 )
-
-    call r8_rkf45 ( derivs, neqn, y, yp, t, t_out, relerr, 10d0**(-4), flag )
-
-    xx(i_step)=t_out !mine
-    yy(:,i_step)=y  !mine
-    !  write ( *, '(i4,2x,4g14.6)' ) flag, t, y(1), y(2)
-    end do
-
-    numstep=n_step
-    numkeep=numstep*5/40                        !number of steps to keep on file(transitory)
-    indexkeep=numstep-numkeep+1
-    allocate(intensitys(3,numkeep))
-    do z=indexkeep,numstep,1  ! calculate the intensity for the last 'numkeep' values of y
-        intensitys(1,z-indexkeep+1)=yy(1,z)**2+yy(2,z)**2 !|E_x|^2
-        intensitys(2,z-indexkeep+1)=yy(3,z)**2+yy(4,z)**2 !|E_y|^2
-        intensitys(3,z-indexkeep+1)=sqrt(intensitys(1,z-indexkeep+1)+intensitys(2,z-indexkeep+1)) !|E|
-    enddo
-    print*, 'shape exr:', shape(yy(1,:)) ,' ', '=', n_step
-    print*, 'shape intensity:', shape(intensitys(3,:))
-    call local_max(intensitys(3,:),numkeep,5,debug) !searches for local maximum of the intensity, for the biffurcatoin diagrams.(prints to bynary file)
-
-    return
-
-end subroutine
-subroutine maxrk4f90()
-     !17/3/2016
-    USE constants
-    use my_lib
-    use funcs
-
-    IMPLICIT NONE
-
-    integer ( kind = 4 ), parameter :: n = 9
-    real ( kind = 8 ), parameter :: dt = 1d0
-    !external derivsn
-    real ( kind = 8 ) t0
-    real ( kind = 8 ) t1
-    real ( kind = 8 ), parameter :: tmax = 500.*20*gperp/10**6
-    real ( kind = 8 ) u1(n)
-    real ( kind = 8 ) u0(n)
-
-    real*8, allocatable, dimension(:,:) :: intensitys, yy
-    REAL*8, allocatable, dimension(:) :: xx
-    integer :: numstep
-    integer :: indexkeep
-    integer :: numkeep
-    integer :: z
-    integer, parameter :: debug=1
-    integer i_step
-
-    call comparams()                             !parameters to compare with the expected solutions
-    call saveparams()                            !saves the used parameters to a bin file, to be read by python.
-
-    call timestamp ( )
-    write ( *, '(a)' ) ' '
-    write ( *, '(a)' ) 'RK4_PRB'
-    write ( *, '(a)' ) '  FORTRAN90 version.'
-    write ( *, '(a)' ) '  Test the RK4 library.'
-
-    t0 = 0.0D+00
-    u0=(/1., 1., 1.,-1., 1.,1., 1.,-1.9, 6.65973518*10**3/)
-    numstep=int(tmax/dt)
-    allocate(xx(numstep),yy(n,numstep))
-    i_step=1
-    xx(1)=t0 !mine0
-    yy(:,1)=u0  !mine
-
-
-    do
-        !
-        !  Print (T0,U0).
-        !  Stop if we've exceeded TMAX.
-        if ( tmax <= t0 ) then
-          exit
+    real :: start, finish !timing performance
+
+    !Rk4
+    !real ( kind = 8 ), parameter :: dt = .1d0 !time step
+    !real*8, parameter :: intime = 500.*25*gperp/10**6 !integration time for each step
+    integer(4), parameter :: n = 9 !(number of fields)
+    real ( kind = 8 )     :: t0=0 !initial time.
+    real ( kind = 8 )     :: t1
+    real ( kind = 8 )     :: tmax ! End time
+    real ( kind = 8 )     :: u1(n)
+    real ( kind = 8 )     :: u0(9)=(/1., 1., 1.,-1., 1.,1., 1.,-1.9, 6.65973518*10**3/) !Initial conditions
+     !SWIPE
+    real*8                :: w_stop, h
+    integer(4)            :: count_peak=0
+    integer(4), parameter :: swype_step=50
+    integer*4             :: i
+
+    tmax = intime
+    w_stop = 0.0035
+    wf = 0.0047
+    h = -(w_stop-wf)/swype_step
+
+    Print*, 'Swype step: ', h, '', 'Time step', dt
+
+    OPEN(2,file='peak.in',form='unformatted',status='replace',access='stream')
+    OPEN(3,file='varw.in',form='unformatted',status='replace',access='stream')
+    OPEN(4,file='varm.in',form='unformatted',status='replace',access='stream')
+    OPEN(7,file='times.in',form='unformatted',status='replace',access='stream')
+
+    do i=1,swype_step  !swipe steps.  If i=1 integrates only one time for m0 and w0
+
+        if (swype_step.eq.1) then
+            !exports files ready to plot the variables for one run.
+            call maxrk4f90_swipe_v1(t0,t1,tmax,u1,u0,count_peak)
+            CLOSE(2)
+            CLOSE(3)
+            CLOSE(4)
+            CLOSE(7)
+            print*, 'Performed only one integration. Outputs fields.'
+            stop
         end if
-        !
-        !  Otherwise, advance to time T1, and have RK4 estimate
-        !  the solution U1 there.
-        t1 = t0 + dt
-        call rk4vec ( t0, n, u0, dt, derivsn, u1 )
-        !  Shift the data to prepare for another step.
 
-        t0 = t1
-        u0(1:n) = u1(1:n)
+      !  if (swype_step>1) then  !this if its an overdo, i can erase it. its stetic.
+            !if swype greater than 1:
+            call cpu_time(start) !Start iteration time traking
+            print*, '-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-'
+            print*, 'step:',i,'of',swype_step
+            call maxrk4f90_swipe_v2(t0,t1,tmax,u1,u0,count_peak)
+            wf=wf-h
+            tmax=t0+intime
+            call cpu_time(finish) !Finish iteration time traking
 
-        i_step=i_step+1
-        xx(i_step)=t1 !mine
-        yy(:,i_step)=u1  !mine
-        !  write ( *, '(i4,2x,4g14.6)' ) flag, t, y(1), y(2)
-    end do
+            print '("Time = ",f6.3," seconds.")', finish-start
+            write(7) finish-start!write time elapsed for the i-th iteration.
 
-    print*,''
-    PRINT*, 'check: dim(xx)=numstep', shape(xx),'=', numstep
-    print*,''
-
-    numkeep=numstep*5/20                        !number of steps to keep on file(transitory)
-    indexkeep=numstep-numkeep+1
-    allocate(intensitys(3,numkeep))
-    do z=indexkeep,numstep,1  ! calculate the intensity for the last 'numkeep' values of y
-        intensitys(1,z-indexkeep+1)=yy(1,z)**2+yy(2,z)**2 !|E_x|^2
-        intensitys(2,z-indexkeep+1)=yy(3,z)**2+yy(4,z)**2 !|E_y|^2
-        intensitys(3,z-indexkeep+1)=sqrt(intensitys(1,z-indexkeep+1)+intensitys(2,z-indexkeep+1)) !|E|
+       ! end if
     enddo
-    print*, 'shape exr:', shape(yy(1,:)) ,' ', '=', numstep
-    print*, 'shape intensity:', shape(intensitys(3,:))
-    call local_max(intensitys(3,:),numkeep,5,debug) !searches for local maximum of the intensity, for the biffurcatoin diagrams.(prints to bynary file)
 
-    !**************************************************************************************
-    !write the variables to a binary file, to be read by python for plotting and analysis.
-
-    OPEN(2,file='time.in',form='unformatted')
-        WRITE(2) xx(indexkeep: numstep)
     CLOSE(2)
+    CLOSE(3)
+    CLOSE(4)
+    CLOSE(7)
+    print*, 'Total number of peaks found: ', count_peak
 
-    OPEN(1,file='exr.in',form='unformatted')
-        WRITE(1) yy(1,indexkeep: numstep)
-    CLOSE(1)
-
-    OPEN(1,file='pop.in',form='unformatted')
-        WRITE(1) yy(9,indexkeep: numstep)
-    CLOSE(1)
-
-    OPEN(1,file='intensity.in',form='unformatted')
-        WRITE(1) intensitys(3,:)
-    CLOSE(1)
-
-    OPEN(1,file='intensity_x2.in',form='unformatted')
-        WRITE(1) intensitys(1,:)
-    CLOSE(1)
-
-    OPEN(1,file='intensity_y2.in',form='unformatted')
-        WRITE(1) intensitys(2,:)
-    CLOSE(1)
-
-    deallocate(xx,yy,intensitys)
     return
-
 end subroutine
-subroutine maxrk4f90_straight()
-    !17/3/2016
-    !Base script for a runge kutta 4 (fixed step) integration of the Maxwell bloch equations with phase modulation.
-    ! This subroutine is the basis for the other routines used to study the equations.
+
+subroutine gen_integ_swipe_strobo()
+    use constants
+    use funcs
+
+    IMPLICIT NONE
+    real :: start, finish !timing performance
+
+    !Rk4
+    !real ( kind = 8 ), parameter :: dt = .1d0 !time step
+    !real*8, parameter :: intime = 500.*25*gperp/10**6 !integration time for each step
+    integer (4), parameter :: n = 9 !(number of fields)
+    real ( kind = 8 )      :: t0=0 !initial time.
+    real ( kind = 8 )      :: t1
+    real ( kind = 8 )      :: tmax ! End time
+    real ( kind = 8 )      :: u1(n)
+    real ( kind = 8 )      :: u0(9)=(/1., 1., 1.,-1., 1.,1., 1.,-1.9, 6.65973518*10**3/) !Initial conditions
+     !SWIPE
+    real*8                 :: w_stop, h
+    integer(4)             :: count_peak=0
+    integer(4), parameter  :: swype_step=50
+    integer                :: i
+
+    tmax = intime
+    w_stop = 0.0035
+    wf = 0.0047
+    h = -(w_stop-wf)/swype_step
+
+    Print*, 'Swype step: ', h, '', 'Time step', dt
+
+    OPEN(2,file='peak.in',form='unformatted',status='replace',access='stream')
+    OPEN(3,file='varw.in',form='unformatted',status='replace',access='stream')
+    OPEN(4,file='varm.in',form='unformatted',status='replace',access='stream')
+    OPEN(7,file='times.in',form='unformatted',status='replace',access='stream')
+
+    do i=1,swype_step  !swipe steps.  If i=1 integrates only one time for m0 and w0
+
+        if (swype_step.eq.1) then
+            !exports files ready to plot the variables for one run.
+            call maxrk4f90_swipe_v1(t0,t1,tmax,u1,u0,count_peak)
+            CLOSE(2)
+            CLOSE(3)
+            CLOSE(4)
+            CLOSE(7)
+            print*, 'Performed only one integration. Outputs fields.'
+            stop
+        end if
+
+      !  if (swype_step>1) then  !this if its an overdo, i can erase it. its stetic.
+            !if swype greater than 1:
+            call cpu_time(start) !Start iteration time traking
+            print*, '-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-'
+            print*, ''
+            print*, 'step:',i,'of',swype_step
+            call maxrk4f90_swipe_strobo(t0,t1,tmax,u1,u0,count_peak)
+            wf=wf-h
+            tmax=t0+intime
+            call cpu_time(finish) !Finish iteration time traking
+
+            print '("Time = ",f6.3," seconds.")', finish-start
+            write(7) finish-start!write time elapsed for the i-th iteration.
+
+       ! end if
+    enddo
+
+    CLOSE(2)
+    CLOSE(3)
+    CLOSE(4)
+    CLOSE(7)
+    print*, 'Total number of peaks found: ', count_peak
+
+    return
+end subroutine
+
+subroutine maxrk4f90_swipe_strobo(t0,t1,tmax,u1,u0,count_peak)
+!25/3/2016
+
+    !Routine used to swipe different values of w or m  in order to map the intensity dinamics
+    !script for a runge kutta 4 (fixed step) integration of the Maxwell bloch equations with phase modulation.
 
     !Integrates the MX-BL phase mod equations with RK4 and output the fields in a matrix yy, only for the times
-    !explicited in numkeep(the number of steps i will keep before the last.)
+    !explicited in numkeep(the time i will keep before the end (in integration steps).
+    !explicited in keepkeep(the number of steps (while skiping some, to make the output smaller) i will keep before the last.)
 
-    !Input <-- dt(time step size), t0, u0(initial field values), tmax
-    !Input <-- The parameters used for the normalizations are in Constants module.
-    !Input <-- Numkeep(the number of steps i keep for display)
+    !Input(from constants module) <-- dt(time step size), t0, u0(initial field values), tmax
+    !Input(from constants module) <-- The parameters used for the normalizations are in Constants module.
+    !Input(inside program) <-- Numkeep(the number of steps i keep for display)
+    !Input <-- t0 (initial time), tmax(max time), u0(initial conditions)
 
-    !Output --> xx(numkeep) the times used in the integration. yy(9,numkeep) the field values.
-    !Output --> Intensitys(3,numkeep) The intensity of the Ex field, the Ey field, and the total intensity.
+    !Input/Output <-- t1, u1, Count_peak. Comunicates between runs the last values to keep integrating.
 
-    USE constants
-    use my_lib
+    !Output --> xx(keepkeep) the times used in the integration. yy(9,keepkeep) the field values.
+    !Output --> Intensitys(3,keepkeep) The intensity of the Ex field, the Ey field, and the total intensity.
+    !Output --> peak.in, varw.in, varm.in (local maxima, 'wf' values, and 'm' values)
+
+    use constants
     use funcs
-
     IMPLICIT NONE
 
-    integer ( kind = 4 ), parameter :: n = 9 !(number of fields)
-    real ( kind = 8 ), parameter :: dt = 1d0 !time step
-    real ( kind = 8 ) t0 !initial time.
-    real ( kind = 8 ) t1
-    real ( kind = 8 ), parameter :: tmax = 500.*20*gperp/10**6 ! End time
-    real ( kind = 8 ) u1(n)
-    real ( kind = 8 ) u0(n) !Initial conditions
+    !Rk4***
+    !real ( kind = 8 ), intent(in):: dt  !time step
+    !real*8, parameter :: intime = 500.*25*gperp/10**6
+    integer ( kind = 4 ), parameter :: n = 9   !(number of fields)
+    real ( kind = 8 ),  intent(inout) :: t0    !initial time.
+    real ( kind = 8 ),  intent(inout) :: t1
+    real ( kind = 8 ),  intent(inout) :: tmax  !End time
+    real ( kind = 8 ),  intent(inout) :: u1(n)
+    real ( kind = 8 ),  intent(inout) :: u0(n) !Initial conditions
 
+    !fields to keep***
+    integer(4),intent(inout) :: count_peak   !Counts the peaks i find.
     real*8, allocatable, dimension(:,:) :: intensitys, yy   !Fields
-    REAL*8, allocatable, dimension(:) :: xx                 !Times
+    real*8, allocatable, dimension(:) :: xx  , coseno       !Time array
     integer :: numstep              !number of integration steps
     integer :: indexkeep            !index of the first step i keep
     integer :: numkeep              !number of steps i keep
-    integer :: z
+    integer :: z                    !just another stepping integer
+    integer :: i_step, k_step       !integration step and keep (for the fields) step.
+    integer :: tempstep , keepkeep, skip=25  !tempstep: temporal step. !keepkeep: the dimention of the field arrays. ! skip: the steps i skip while saving.
+
     integer, parameter :: debug=1    ! 1 to display debug info, 0 to display a cleaner output.
-    integer i_step, k_step           !integration step and keep step.
 
-    call comparams()                             !parameters to compare with the expected solutions
-    call saveparams()                            !saves the used parameters to a bin file, to be read by python.
+    call comparams()                 !parameters to compare with the expected solutions
+    call saveparams()                !saves the used parameters to a bin file, to be read by python.
 
-    write ( *, '(a)' ) ' '
-    write ( *, '(a)' ) 'RK4_Phasemod Maxwell'
+    tempstep=0
+    numstep=int(intime/dt)
+    numkeep=numstep*1/15             !number of steps to keep on file(transitory)
+    indexkeep=numstep-numkeep+1      !set indexkeep
 
-    t0 = 0.0D+00
-    u0=(/1., 1., 1.,-1., 1.,1., 1.,-1.9, 6.65973518*10**3/)
-    numstep=int(tmax/dt)
-    numkeep=numstep*4/20                         !number of steps to keep on file(transitory)
-    allocate(xx(numkeep),yy(n,numkeep))
-    indexkeep=numstep-numkeep+1       !set indexkeep
+    keepkeep=numkeep/skip
+
+    print*, 't0=', t0, '', 'tmax=', tmax
+    print*, 'w=', wf
+
     i_step=1
-    k_step=1
-    do
-        !  Stop if we've exceeded TMAX.
-        if ( tmax <= t0 ) then
+    k_step=1 !initialize i_step and k_ step
+
+    allocate(xx(keepkeep),yy(n,keepkeep), coseno(keepkeep))  !allocate the fields
+
+    do  !Rk4 integration
+        if ( tmax <= t0 ) then ! Stop if we've exceeded TMAX.
           exit
         end if
-        !
         !  Otherwise, advance to time T1, and have RK4 estimate
         !  the solution U1 there.
         t1 = t0 + dt
@@ -529,213 +231,423 @@ subroutine maxrk4f90_straight()
         u0(1:n) = u1(1:n)
 
         if ( i_step >= indexkeep ) then !if step > indexkeep, keep the values.
-            xx(k_step)=t1    !new time step
-            yy(:,k_step)=u1  !new fields
-            k_step=k_step+1
+            if ((tempstep).eq.(i_step-indexkeep)) then !see if the program made 'skip' steps and save again.
+                tempstep=tempstep+skip  !advance to the next time i have to keep
+                xx(k_step)=t1    !new time step
+                yy(:,k_step)=u1  !new fields
+                k_step=k_step+1  !advance k_step preparing for the next
+            end if
         end if
         i_step=i_step+1
     end do
+    !Until here is the integration
 
-    allocate(intensitys(3,numkeep))
-    do z=1,numkeep,1  ! calculate the intensity for the last 'numkeep' values of y
+    coseno=cos(wf*xx)!will it work?????????????
+
+    allocate(intensitys(3,keepkeep))
+    do z=1,keepkeep,1  ! calculate the intensity for the last 'numkeep' values of y
         intensitys(1,z)=yy(1,z)**2+yy(2,z)**2 !|E_x|^2
         intensitys(2,z)=yy(3,z)**2+yy(4,z)**2 !|E_y|^2
         intensitys(3,z)=sqrt(intensitys(1,z)+intensitys(2,z)) !|E|
     enddo
-    print*, 'shape exr:', shape(yy(1,:)) ,' ', '=', numkeep
-    print*, 'shape intensity:', shape(intensitys(3,:))
-    call local_max(intensitys(3,:),numkeep,5,debug) !searches for local maximum of the intensity, for the biffurcatoin diagrams.(prints to bynary file)
 
-    !**************************************************************************************
-    !write the variables to a binary file, to be read by python for plotting and analysis.
+    print*, 'k_step=', k_step-1
+    print*, 'tempstep=', tempstep, 'should be k_step*skip:' , (k_step-1)*skip
+    print*, 'keepkeep=', keepkeep
 
-    OPEN(2,file='time.in',form='unformatted')
-        WRITE(2) xx(:)
-    CLOSE(2)
 
-    OPEN(1,file='exr.in',form='unformatted')
-        WRITE(1) yy(1,:)
-    CLOSE(1)
-
-    OPEN(1,file='pop.in',form='unformatted')
-        WRITE(1) yy(9,:)
-    CLOSE(1)
-
-    OPEN(1,file='intensity.in',form='unformatted')
-        WRITE(1) intensitys(3,:)
-    CLOSE(1)
-
-    OPEN(1,file='intensity_x2.in',form='unformatted')
-        WRITE(1) intensitys(1,:)
-    CLOSE(1)
-
-    OPEN(1,file='intensity_y2.in',form='unformatted')
-        WRITE(1) intensitys(2,:)
-    CLOSE(1)
+    !look for local maxima of the intensity
+    !prints maxima values to peak.in,  wf to varw.in, and m to varm.in
+    call local_max_bif_cos(coseno,intensitys(3,:),keepkeep,5,count_peak , debug)
+    !to be read by a python program, for analisis and ploting.
+    !i dont need the index for the peaks.
 
     deallocate(xx,yy,intensitys)
     return
-
 end subroutine
 
-
-subroutine maxrk4f90_swipe()
-    !18/3/2016
+subroutine maxrk4f90_swipe_v1(t0,t1,tmax,u1,u0,count_peak)
+!25/3/2016
 
     !Routine used to swipe different values of w or m  in order to map the intensity dinamics
     !script for a runge kutta 4 (fixed step) integration of the Maxwell bloch equations with phase modulation.
 
     !Integrates the MX-BL phase mod equations with RK4 and output the fields in a matrix yy, only for the times
-    !explicited in numkeep(the number of steps i will keep before the last.)
+    !explicited in numkeep(the time i will keep before the end (in integration steps).
+    !explicited in keepkeep(the number of steps (while skiping some, to make the output smaller) i will keep before the last.)
 
-    !Input <-- dt(time step size), t0, u0(initial field values), tmax
-    !Input <-- The parameters used for the normalizations are in Constants module.
-    !Input <-- Numkeep(the number of steps i keep for display)
+    !Input(from constants module) <-- dt(time step size), t0, u0(initial field values), tmax
+    !Input(from constants module) <-- The parameters used for the normalizations are in Constants module.
+    !Input(inside program) <-- Numkeep(the number of steps i keep for display)
+    !Input <-- t0 (initial time), tmax(max time), u0(initial conditions)
 
-    !Output --> xx(numkeep) the times used in the integration. yy(9,numkeep) the field values.
-    !Output --> Intensitys(3,numkeep) The intensity of the Ex field, the Ey field, and the total intensity.
+    !Input/Output <-- t1, u1, Count_peak. Comunicates between runs the last values to keep integrating.
 
-    USE constants
-    use my_lib
+    !Output --> xx(keepkeep) the times used in the integration. yy(9,keepkeep) the field values.
+    !Output --> Intensitys(3,keepkeep) The intensity of the Ex field, the Ey field, and the total intensity.
+    !Output --> peak.in, varw.in, varm.in (local maxima, 'wf' values, and 'm' values)
+
+
+    use constants
     use funcs
-    use varparams
-
     IMPLICIT NONE
 
-    !Rk4
-    integer ( kind = 4 ), parameter :: n = 9 !(number of fields)
-    real ( kind = 8 ), parameter :: dt = 1d0 !time step
-    real ( kind = 8 ) t0 !initial time.
-    real ( kind = 8 ) t1
-    real ( kind = 8 ) tmax ! End time
-    real ( kind = 8 ) u1(n)
-    real ( kind = 8 ) u0(n) !Initial conditions
+    !Rk4***
+    !real ( kind = 8 ), intent(in):: dt  !time step
+    !real*8, parameter :: intime = 500.*25*gperp/10**6
+    integer ( kind = 4 ), parameter :: n = 9   !(number of fields)
+    real ( kind = 8 ),  intent(inout) :: t0    !initial time.
+    real ( kind = 8 ),  intent(inout) :: t1
+    real ( kind = 8 ),  intent(inout) :: tmax  !End time
+    real ( kind = 8 ),  intent(inout) :: u1(n)
+    real ( kind = 8 ),  intent(inout) :: u0(n) !Initial conditions
 
-    !fields to keep
-    real*8, parameter :: intime = 500.*20*gperp/10**6
-
+    !fields to keep***
+    integer(4),intent(inout) :: count_peak   !Counts the peaks i find.
     real*8, allocatable, dimension(:,:) :: intensitys, yy   !Fields
-    real*8, allocatable, dimension(:) :: xx                 !Times
+    real*8, allocatable, dimension(:) :: xx                 !Time array
     integer :: numstep              !number of integration steps
     integer :: indexkeep            !index of the first step i keep
     integer :: numkeep              !number of steps i keep
-    integer :: z
+    integer :: z                    !just another stepping integer
+    integer :: i_step, k_step       !integration step and keep (for the fields) step.
+    integer :: tempstep , keepkeep, skip=25  !tempstep: temporal step. !keepkeep: the dimention of the field arrays. ! skip: the steps i skip while saving.
+
     integer, parameter :: debug=1    ! 1 to display debug info, 0 to display a cleaner output.
-    integer i_step, k_step           !integration step and keep step.
 
-    !SWIPE
-    integer(4) :: count_peak
-    real*8 :: w_stop, h
-    !common /varparam/ w0,m0
-    integer :: i
-    real*8, allocatable, dimension(:) :: data1,data2
+    call comparams()                 !parameters to compare with the expected solutions
+    call saveparams()                !saves the used parameters to a bin file, to be read by python.
 
-    call comparams()                             !parameters to compare with the expected solutions
-    call saveparams()                            !saves the used parameters to a bin file, to be read by python.
+    numstep=int(intime/dt)
+    numkeep=numstep*1/15             !number of steps to keep on file(transitory)
+    indexkeep=numstep-numkeep+1      !set indexkeep
 
-    write ( *, '(a)' ) ' '
-    write ( *, '(a)' ) 'RK4_Phasemod Maxwell'
+    keepkeep=numkeep/skip
 
-    count_peak=0
-    tmax = intime
-    t0 = 0.0D+00
-    u0=(/1., 1., 1.,-1., 1.,1., 1.,-1.9, 6.65973518*10**3/)
-    numstep=int(tmax/dt)
-    numkeep=numstep*1/20              !number of steps to keep on file(transitory)
-    indexkeep=numstep-numkeep+1       !set indexkeep
+    print*, 't0=', t0, '', 'tmax=', tmax
+    print*, 'w=', wf
 
-    w_stop=0.0047
-    w0=0.0035
-    h=(w_stop-w0)/20d0
+    i_step=1
+    k_step=1 !initialize i_step and k_ step
 
-    m0=0.02d0
-    do i=1,4
-        allocate(xx(numkeep),yy(n,numkeep))
-        w0=w0+h
-        tmax=t0+intime
+    allocate(xx(keepkeep),yy(n,keepkeep))  !allocate the fields
+    tempstep=0
 
-        print*, 't0=', t0, '', 'tmax=', tmax
-        print*, 'w=',   w0
-        print*, i
+    do  !Rk4 integration
+        if ( tmax <= t0 ) then ! Stop if we've exceeded TMAX.
+          exit
+        end if
+        !  Otherwise, advance to time T1, and have RK4 estimate
+        !  the solution U1 there.
+        t1 = t0 + dt
+        call rk4vec ( t0, n, u0, dt, derivsn, u1 )
+        !  Shift the data to prepare for another step.
 
-        i_step=1
-        k_step=1
+        t0 = t1
+        u0(1:n) = u1(1:n)
 
-        do
-            !  Stop if we've exceeded TMAX.
-            if ( tmax <= t0 ) then
-              exit
-            end if
-            !
-            !  Otherwise, advance to time T1, and have RK4 estimate
-            !  the solution U1 there.
-            t1 = t0 + dt
-            call rk4vec ( t0, n, u0, dt, derivsn_var, u1 )
-            !  Shift the data to prepare for another step.
-
-            t0 = t1
-            u0(1:n) = u1(1:n)
-
-            if ( i_step >= indexkeep ) then !if step > indexkeep, keep the values.
+        if ( i_step >= indexkeep ) then !if step > indexkeep, keep the values.
+            if ((tempstep).eq.(i_step-indexkeep)) then !see if the program made 'skip' steps and save again.
+                tempstep=tempstep+skip  !advance to the next time i have to keep
                 xx(k_step)=t1    !new time step
                 yy(:,k_step)=u1  !new fields
-                k_step=k_step+1
+                k_step=k_step+1  !advance k_step preparing for the next
             end if
-            i_step=i_step+1
-        end do
-
-        print*, 'RK4 exit ok'
-
-        allocate(intensitys(3,numkeep))
-        do z=1,numkeep,1  ! calculate the intensity for the last 'numkeep' values of y
-            intensitys(1,z)=yy(1,z)**2+yy(2,z)**2 !|E_x|^2
-            intensitys(2,z)=yy(3,z)**2+yy(4,z)**2 !|E_y|^2
-            intensitys(3,z)=sqrt(intensitys(1,z)+intensitys(2,z)) !|E|
-        enddo
-
-        !Until here is the integration
-
-        print*, 'intensitys exit ok'
-        print*, 'shape exr:', shape(yy(1,:)) ,' ', '=', numkeep
-        print*, 'shape intensity:', shape(intensitys(3,:))
-        print*, 'indexkeep=', indexkeep
-
-        !**************************************************************************************
-        !write the variables to a binary file, to be read by python for plotting and analysis.
-        call local_max_bif_v2(intensitys(3,:),numkeep,5,count_peak,debug)
-
-        !i dont need the index for the peaks.
-        deallocate(xx,yy,intensitys)
-
+        end if
+        i_step=i_step+1
     end do
-!
-    allocate(data1(count_peak))
-    OPEN(2, file='peak.in', ACCESS='STREAM', FORM='UNFORMATTED')
-    READ(2) data1
-    CLOSE(2)
-    print*, data1
-    OPEN(5, file='peak_fort.in', FORM='UNFORMATTED' )
-    write(5) data1
-    CLOSE(5)
+    !Until here is the integration
 
-!    allocate(data2(count_peak))
-!    OPEN(4, file='varparam_m0.in', ACCESS='STREAM', FORM='UNFORMATTED')
-!    READ(4) data2
-!    CLOSE(4)
-!    OPEN(5, file='varparam_m0_fort.in', FORM='UNFORMATTED' )
-!    write(5) data2
-!    CLOSE(5)
+    allocate(intensitys(3,keepkeep))
+    do z=1,keepkeep,1  ! calculate the intensity for the last 'numkeep' values of y
+        intensitys(1,z)=yy(1,z)**2+yy(2,z)**2 !|E_x|^2
+        intensitys(2,z)=yy(3,z)**2+yy(4,z)**2 !|E_y|^2
+        intensitys(3,z)=sqrt(intensitys(1,z)+intensitys(2,z)) !|E|
+    enddo
 
-    OPEN(3, file='varw0.in', ACCESS='STREAM', FORM='UNFORMATTED')
-    READ(3) data1
-    CLOSE(3)
-    OPEN(5, file='varparam_w0_fort.in', FORM='UNFORMATTED' )
-    write(5) data1
-    CLOSE(5)
+    print*, 'k_step=', k_step-1
+    print*, 'tempstep=', tempstep, 'should be k_step*skip:' , (k_step-1)*skip
+    print*, 'keepkeep=', keepkeep
 
-deallocate(data1,data2)
-   return
+    !**************************************************************************************
+    !write the variables to a binary file, to be read by python for plotting and analysis.
 
+    OPEN(1,file='time.in',form='unformatted',status='replace')
+        WRITE(1) xx(:)
+    CLOSE(1)
+
+    OPEN(1,file='exr.in',form='unformatted',status='replace')
+        WRITE(1) yy(1,:)
+    CLOSE(1)
+
+    OPEN(1,file='pop.in',form='unformatted',status='replace')
+        WRITE(1) yy(9,:)
+    CLOSE(1)
+
+    OPEN(1,file='intensity.in',form='unformatted',status='replace')
+        WRITE(1) intensitys(3,:)
+    CLOSE(1)
+
+    OPEN(1,file='intensity_x2.in',form='unformatted',status='replace')
+        WRITE(1) intensitys(1,:)
+    CLOSE(1)
+
+    OPEN(1,file='intensity_y2.in',form='unformatted',status='replace')
+        WRITE(1) intensitys(2,:)
+    CLOSE(1)
+
+    !look for local maxima of the intensity
+    !prints maxima values to peak.in,  wf to varw.in, and m to varm.in
+    call local_max_bif_v2(intensitys(3,:),keepkeep,5,count_peak,debug)
+    !to be read by a python program, for analisis and ploting.
+
+    deallocate(xx,yy,intensitys)
+    return
 end subroutine
 
+subroutine maxrk4f90_swipe_v2(t0,t1,tmax,u1,u0,count_peak)
+!25/3/2016
 
+    !Routine used to swipe different values of w or m  in order to map the intensity dinamics
+    !script for a runge kutta 4 (fixed step) integration of the Maxwell bloch equations with phase modulation.
+
+    !Integrates the MX-BL phase mod equations with RK4 and output the fields in a matrix yy, only for the times
+    !explicited in numkeep(the time i will keep before the end (in integration steps).
+    !explicited in keepkeep(the number of steps (while skiping some, to make the output smaller) i will keep before the last.)
+
+    !Input(from constants module) <-- dt(time step size), t0, u0(initial field values), tmax
+    !Input(from constants module) <-- The parameters used for the normalizations are in Constants module.
+    !Input(inside program) <-- Numkeep(the number of steps i keep for display)
+    !Input <-- t0 (initial time), tmax(max time), u0(initial conditions)
+
+    !Input/Output <-- t1, u1, Count_peak. Comunicates between runs the last values to keep integrating.
+
+    !Output --> xx(keepkeep) the times used in the integration. yy(9,keepkeep) the field values.
+    !Output --> Intensitys(3,keepkeep) The intensity of the Ex field, the Ey field, and the total intensity.
+    !Output --> peak.in, varw.in, varm.in (local maxima, 'wf' values, and 'm' values)
+
+    use constants
+    use funcs
+    IMPLICIT NONE
+
+    !Rk4***
+    !real ( kind = 8 ), intent(in):: dt  !time step
+    !real*8, parameter :: intime = 500.*25*gperp/10**6
+    integer ( kind = 4 ), parameter   :: n = 9   !(number of fields)
+    real ( kind = 8 ),  intent(inout) :: t0    !initial time.
+    real ( kind = 8 ),  intent(inout) :: t1
+    real ( kind = 8 ),  intent(inout) :: tmax  !End time
+    real ( kind = 8 ),  intent(inout) :: u1(n)
+    real ( kind = 8 ),  intent(inout) :: u0(n) !Initial conditions
+
+    !fields to keep***
+    integer(4),intent(inout)            :: count_peak   !Counts the peaks i find.
+    real*8, allocatable, dimension(:,:) :: intensitys, yy   !Fields
+    real*8, allocatable, dimension(:)   :: xx                 !Time array
+    integer :: numstep              !number of integration steps
+    integer :: indexkeep            !index of the first step i keep
+    integer :: numkeep              !number of steps i keep
+    integer :: z                    !just another stepping integer
+    integer :: i_step, k_step       !integration step and keep (for the fields) step.
+    integer :: tempstep , keepkeep, skip=50  !tempstep: temporal step. !keepkeep: the dimention of the field arrays. ! skip: the steps i skip while saving.
+
+    real :: start2, finish2 !timing performance
+    integer, parameter :: debug=1    ! 1 to display debug info, 0 to display a cleaner output.
+
+    call comparams()                 !parameters to compare with the expected solutions
+    call saveparams()                !saves the used parameters to a bin file, to be read by python.
+
+    tempstep=0
+    numstep=int(intime/dt)
+    numkeep=numstep*1/15             !number of steps to keep on file(transitory)
+    indexkeep=numstep-numkeep+1      !set indexkeep
+
+    keepkeep=numkeep/skip+1
+
+    print*, 't0=', t0, '', 'tmax=', tmax
+    print*, 'w=', wf
+
+    i_step=1
+    k_step=1 !initialize i_step and k_ step
+
+    allocate(xx(keepkeep),yy(n,keepkeep))  !allocate the fields
+
+    do  !Rk4 integration
+        if ( tmax <= t0 ) then ! Stop if we've exceeded TMAX.
+          exit
+        end if
+        !  Otherwise, advance to time T1, and have RK4 estimate
+        !  the solution U1 there.
+        t1 = t0 + dt
+        call rk4vec ( t0, n, u0, dt, derivsn, u1 )
+        !  Shift the data to prepare for another step.
+
+        t0 = t1
+        u0(1:n) = u1(1:n)
+
+        if ( i_step >= indexkeep ) then !if step > indexkeep, keep the values.
+            if ((tempstep).eq.(i_step-indexkeep)) then !see if the program made 'skip' steps and save again.
+                tempstep=tempstep+skip  !advance to the next time i have to keep
+                xx(k_step)=t1    !new time step
+                yy(:,k_step)=u1  !new fields
+                k_step=k_step+1  !advance k_step preparing for the next
+            end if
+        end if
+        i_step=i_step+1
+    end do
+    !Until here is the integration
+
+    allocate(intensitys(3,keepkeep))
+    do z=1,keepkeep,1  ! calculate the intensity for the last 'numkeep' values of y
+        intensitys(1,z)=yy(1,z)**2+yy(2,z)**2 !|E_x|^2
+        intensitys(2,z)=yy(3,z)**2+yy(4,z)**2 !|E_y|^2
+        intensitys(3,z)=sqrt(intensitys(1,z)+intensitys(2,z)) !|E|
+    enddo
+
+    print*, 'k_step=', k_step-1
+    print*, 'tempstep=', tempstep, 'should be k_step*skip:' , (k_step-1)*skip
+    print*, 'keepkeep=', keepkeep
+
+    !look for local maxima of the intensity
+    !prints maxima values to peak.in,  wf to varw.in, and m to varm.in
+    call cpu_time(start2) !Start iteration time traking
+    call local_max_bif_v2(intensitys(3,:),keepkeep,5,count_peak , debug)
+    call cpu_time(finish2) !Finish iteration time traking
+    print '("Local max Time = ",f6.3," seconds.")', finish2-start2
+
+    !to be read by a python program, for analisis and ploting.
+    !i dont need the index for the peaks.
+
+    deallocate(xx,yy,intensitys)
+    return
+end subroutine
+
+subroutine maxrk4f90_swipe_v3(t0,t1,tmax,u1,u0,count_peak)!no numkeep
+!25/3/2016
+
+    !Routine used to swipe different values of w or m  in order to map the intensity dinamics
+    !script for a runge kutta 4 (fixed step) integration of the Maxwell bloch equations with phase modulation.
+
+    !Integrates the MX-BL phase mod equations with RK4 and output the fields in a matrix yy, only for the times
+    !explicited in numkeep(the time i will keep before the end (in integration steps).
+    !explicited in keepkeep(the number of steps (while skiping some, to make the output smaller) i will keep before the last.)
+
+    !Input(from constants module) <-- dt(time step size), t0, u0(initial field values), tmax
+    !Input(from constants module) <-- The parameters used for the normalizations are in Constants module.
+    !Input(inside program) <-- Numkeep(the number of steps i keep for display)
+    !Input <-- t0 (initial time), tmax(max time), u0(initial conditions)
+
+    !Input/Output <-- t1, u1, Count_peak. Comunicates between runs the last values to keep integrating.
+
+    !Output --> xx(keepkeep) the times used in the integration. yy(9,keepkeep) the field values.
+    !Output --> Intensitys(3,keepkeep) The intensity of the Ex field, the Ey field, and the total intensity.
+    !Output --> peak.in, varw.in, varm.in (local maxima, 'wf' values, and 'm' values)
+
+    use constants
+    use funcs
+    IMPLICIT NONE
+
+    !Rk4***
+    !real ( kind = 8 ), intent(in):: dt  !time step
+    !real*8, parameter :: intime = 500.*25*gperp/10**6
+    integer ( kind = 4 ), parameter   :: n = 9   !(number of fields)
+    real ( kind = 8 ),  intent(inout) :: t0    !initial time.
+    real ( kind = 8 ),  intent(inout) :: t1
+    real ( kind = 8 ),  intent(inout) :: tmax  !End time
+    real ( kind = 8 ),  intent(inout) :: u1(n)
+    real ( kind = 8 ),  intent(inout) :: u0(n) !Initial conditions
+
+    !fields to keep***
+    integer*4,intent(inout)             :: count_peak   !Counts the peaks i find.
+    real*8, allocatable, dimension(:,:) :: intensitys, yy   !Fields
+    real*8, allocatable, dimension(:)   :: xx                 !Time array
+!    integer :: numstep              !number of integration steps
+!    integer :: indexkeep            !index of the first step i keep
+    real*8 :: timekeep              !number of steps i keep
+    integer :: z                    !just another stepping integer
+    integer :: i_step, k_step       !integration step and keep (for the fields) step.
+    integer :: tempstep , skip=1  !tempstep: temporal step. !keepkeep: the dimention of the field arrays. ! skip: the steps i skip while saving.
+
+    integer, parameter :: debug=1    ! 1 to display debug info, 0 to display a cleaner output.
+
+    call comparams()                 !parameters to compare with the expected solutions
+    call saveparams()                !saves the used parameters to a bin file, to be read by python.
+
+    tempstep=0
+  !  numstep=int(intime/dt)
+    timekeep=intime*1/15             !number of steps to keep on file(transitory)
+  !  indexkeep=numstep-numkeep+1      !set indexkeep
+
+  !  keepkeep=numkeep/skip
+
+    print*, 't0=', t0, '', 'tmax=', tmax
+    print*, 'w=', wf
+
+    i_step=0
+    k_step=0 !initialize i_step and k_ step
+    OPEN(21,file='tempyy.in',form='unformatted',status='replace',access='stream')
+    OPEN(22,file='tempxx.in',form='unformatted',status='replace',access='stream')
+
+    do  !Rk4 integration
+        if ( tmax<= t0 ) then ! Stop if we've exceeded TMAX.
+          exit
+        end if
+        !  Otherwise, advance to time T1, and have RK4 estimate
+        !  the solution U1 there.
+        t1 = t0 + dt
+        call rk4vec ( t0, n, u0, dt, derivsn, u1 )
+        !  Shift the data to prepare for another step.
+
+        t0 = t1
+        u0(1:n) = u1(1:n)
+    end do
+
+    do  !Rk4 integration
+        if ( timekeep<= t0 ) then ! Stop if we've exceeded TMAX.
+          exit
+        end if
+        !  Otherwise, advance to time T1, and have RK4 estimate
+        !  the solution U1 there.
+        t1 = t0 + dt
+        call rk4vec ( t0, n, u0, dt, derivsn, u1 )
+        !  Shift the data to prepare for another step.
+
+        t0 = t1
+        u0(1:n) = u1(1:n)
+
+        if ((tempstep).eq.(i_step)) then !see if the program made 'skip' steps and save again.
+            tempstep=tempstep+skip  !advance to the next time i have to keep
+            write(22) t1    !new time step
+            write(21) u1  !new fields
+            k_step=k_step+1  !advance k_step preparing for the next
+        end if
+        i_step=i_step+1
+    end do
+
+    allocate(xx(k_step),yy(n,k_step))  !allocate the fields
+    read(21) yy  !posible bug
+    read(22) xx
+    ! i wil have to write the vars
+    close(21)
+    close(22)
+
+    allocate(intensitys(3,k_step))
+    do z=1,k_step,1  ! calculate the intensity for the last 'numkeep' values of y
+        intensitys(1,z)=yy(1,z)**2+yy(2,z)**2 !|E_x|^2
+        intensitys(2,z)=yy(3,z)**2+yy(4,z)**2 !|E_y|^2
+        intensitys(3,z)=sqrt(intensitys(1,z)+intensitys(2,z)) !|E|
+    enddo
+
+    print*, 'k_step=', k_step
+    print*, 'tempstep=', tempstep, 'should be k_step*skip:' , (k_step)*skip
+
+    !look for local maxima of the intensity
+    !prints maxima values to peak.in,  wf to varw.in, and m to varm.in
+
+    call local_max_bif_v2(intensitys(3,:),k_step,5,count_peak , debug)
+    !to be read by a python program, for analisis and ploting.
+    !i dont need the index for the peaks.
+
+    deallocate(xx,yy,intensitys)
+    return
+end subroutine
